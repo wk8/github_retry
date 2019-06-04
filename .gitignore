@@ -1,0 +1,12 @@
+# python cruft
+*.pyc
+
+# venv-related files
+/venv/
+/activate
+
+# coverage files
+/htmlcov/
+/.coverage
+
+/config.yml

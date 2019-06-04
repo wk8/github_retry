@@ -1,0 +1,3 @@
+# TextMate properties
+excludeInFolderSearch = "{$excludeInFolderSearch,__pycache__/*,venv/*}"
+excludeInFileChooser = "{$excludeInFileChooser,__pycache__/*,venv/*}"

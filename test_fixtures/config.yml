@@ -1,0 +1,22 @@
+github:
+  # this is just a RO, public access token
+  api_token: 8b16ac3b4be3f53d47f82c2415d728e7716ceb23
+
+# default settings for repos not listed here are:
+# retrier_class: GitAmendPushRetrier
+# max_retries: 7 # can be set at the repo or at the check level
+# max_retry_delay: 5 # in minutes, can be set at the repo or at the check level
+repositories:
+  kubernetes/kubernetes:
+    retrier_class: KubeRetrier
+    # max_retries: 7
+  moby/moby:
+    checks:
+      codecov/patch:
+        ignore: true
+      codecov/project:
+        ignore: true
+      fast_fail:
+        max_retries: 1
+
+top_level: value
