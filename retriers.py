@@ -15,6 +15,11 @@ class BaseRetrier(object):
     def retry(self, pr_processor, pr_checks_status):
         raise NotImplementedError
 
+    @staticmethod
+    def _github_pr(pr_processor):
+        pr = pr_processor.pull_request
+        return pr_processor.client.get_repo(pr.repo).get_pull(pr.number)
+
 
 class GitAmendPushRetrier(BaseRetrier):
     def cleanup(self, pr_processor):
@@ -22,8 +27,7 @@ class GitAmendPushRetrier(BaseRetrier):
         pass
 
     def retry(self, pr_processor, _pr_checks_status):
-        pr = pr_processor.pull_request
-        gh_pr = pr_processor.client.get_repo(pr.repo).get_pull(pr.number)
+        gh_pr = self.__class__._github_pr(pr_processor)
         pr_repo = gh_pr.head.repo.full_name
 
         git_env = self.__class__._git_env(pr_processor, pr_repo)
@@ -53,7 +57,6 @@ class GitAmendPushRetrier(BaseRetrier):
     @classmethod
     def _git_command(cls, subpath, subcommand, **kwargs):
         with cls._with_chdir(os.path.join(cls._REPOS_ROOT, subpath)):
-            print('wkpo running %s in %s' % (subcommand, os.getcwd()))
             output = subprocess.check_output('git ' + subcommand,  shell=True, stderr=subprocess.STDOUT, **kwargs)
             if isinstance(output, bytes):
                 output = output.decode()
@@ -110,17 +113,75 @@ class GitAmendPushRetrier(BaseRetrier):
             cls._git_command(os.path.dirname(pr_repo), clone_command, env=git_env)
 
 
+class CommentsRetrier(BaseRetrier):
+    # returns the list of all comments made by the user we post as
+    # comments are IssueComment objects
+    # see https://pygithub.readthedocs.io/en/latest/github_objects/IssueComment.html
+    @classmethod
+    def _get_all_comments_by_user(cls, pr_processor):
+        user = pr_processor.config.get('github', 'user')
+        if not user:
+            raise RuntimeError('Github username not defined!')
+
+        gh_pr = cls._github_pr(pr_processor)
+        return [c for c in gh_pr.get_issue_comments() if c.user.login == user]
+
+    @classmethod
+    def _post_comment(cls, pr_processor, body):
+        return cls._github_pr(pr_processor).create_issue_comment(body)
+
+
+class KubeRetrier(CommentsRetrier):
+    def cleanup(self, pr_processor):
+        self.__class__._cleanup(pr_processor)
+
+    def retry(self, pr_processor, pr_checks_status):
+        self.__class__._cleanup(pr_processor, set([check.context for check in pr_checks_status.retry_pending]))
+        for check in pr_checks_status.retrying:
+            self.__class__._post_comment(pr_processor, self._PREFIX + check.context)
+
+    _PREFIX = '/test '
+
+    @classmethod
+    def _cleanup(cls, pr_processor, retry_pending=None):
+        for comment in cls._get_all_comments_by_user(pr_processor):
+            if not comment.body.startswith(cls._PREFIX):
+                continue
+            context = comment.body[len(cls._PREFIX):]
+            if retry_pending is None or context not in retry_pending:
+                comment.delete()
+
+
 if __name__ == '__main__':
-    if True:
-        from github import Github
+    from github import Github
 
-        from pr_processor import PullRequestProcessor
+    from pr_processor import PullRequestProcessor
 
-        pull_request = PullRequest('moby/moby', 38349)
-        config = Config()
-        gh_client = Github(config.get('github', 'api_token'))
-        processor = PullRequestProcessor(pull_request, gh_client, config)
+    pull_request = PullRequest('kubernetes/kubernetes', 77953)
+    # pull_request = PullRequest('moby/moby', 38349)
+    config = Config()
+    gh_client = Github(config.get('github', 'api_token'))
+    processor = PullRequestProcessor(pull_request, gh_client, config)
 
+    if False:
         GitAmendPushRetrier().retry(processor, None)
 
         print(pull_request.last_processed_sha)
+
+    if False:
+        print(CommentsRetrier._get_all_comments_by_user(processor))
+        new_comment = CommentsRetrier._post_comment(processor, 'coucou')
+        print(new_comment)
+        new_comment.delete()
+
+    if False:
+        from models import Check
+        from pr_processor import PullRequestChecksStatus
+
+        retry_pending = [Check(pull_request, 'pull-kubernetes-e2e-gce-100-performance')]
+        pr_checks_status = PullRequestChecksStatus([], [], [], retry_pending, [])
+
+        KubeRetrier().retry(processor, pr_checks_status)
+
+    if False:
+        KubeRetrier().cleanup(processor)
