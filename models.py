@@ -1,7 +1,7 @@
 import re
 
 from sqlalchemy import Column, DateTime, ForeignKeyConstraint, Integer, String
-from sqlalchemy.orm import validates
+from sqlalchemy.orm import relationship, validates
 
 from database import Base
 
@@ -17,7 +17,7 @@ class PullRequest(Base):
 
     # courtesy of the same repo as for MAX_REPO_LENGTH
     _REPO_REGEX = re.compile(r'^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}/[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,99}$', re.IGNORECASE)  # noqa
-    _URL_REGEX = re.compile(r'^(?:https://)?github.com/(%s)/pull/([0-9]+)$' % (_REPO_REGEX.pattern), re.IGNORECASE)
+    _URL_REGEX = re.compile(r'^(?:https://)?github.com/(%s)/pull/([0-9]+)$' % (_REPO_REGEX.pattern[1:-1]), re.IGNORECASE)  # noqa
 
     repo = Column(String(MAX_REPO_LENGTH), primary_key=True)
     number = Column(Integer, primary_key=True)
@@ -67,6 +67,12 @@ class PullRequest(Base):
     @classmethod
     def is_valid_sha(cls, sha):
         return cls._SHA_REGEX.match(sha)
+
+    @property
+    def slug(self):
+        return '%s#%s' % (self.repo, self.number)
+
+    checks = relationship('Check', cascade='all,delete')
 
 
 class Check(Base):

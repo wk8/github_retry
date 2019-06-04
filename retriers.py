@@ -121,7 +121,7 @@ class CommentsRetrier(BaseRetrier):
     def _get_all_comments_by_user(cls, pr_processor):
         user = pr_processor.config.get('github', 'user')
         if not user:
-            raise RuntimeError('Github username not defined!')
+            raise RuntimeError('Missing Github username!')
 
         gh_pr = cls._github_pr(pr_processor)
         return [c for c in gh_pr.get_issue_comments() if c.user.login == user]

@@ -20,18 +20,17 @@ class MailgunNotifier(BaseNotifier):
     See https://documentation.mailgun.com/en/latest/api-sending.html#sending
     '''
     def too_many_failures(self, pr_processor, pr_checks_status):
-        self.__class__._notify('FAILED', pr_checks_status, pr_checks_status)
+        self.__class__._notify('FAILED', pr_processor, pr_checks_status)
 
     def retrying(self, pr_processor, pr_checks_status):
-        self.__class__._notify('Retrying', pr_checks_status, pr_checks_status)
+        self.__class__._notify('Retrying', pr_processor, pr_checks_status)
 
     def success(self, pr_processor, pr_checks_status):
-        self.__class__._notify('SUCCESS', pr_checks_status, pr_checks_status)
+        self.__class__._notify('SUCCESS', pr_processor, pr_checks_status)
 
     @classmethod
     def _notify(cls, overall_status, pr_processor, pr_checks_status):
-        slug = '%s#%s' % (pr_processor.pull_request.repo, pr_processor.pull_request.number)
-        subject = '%s %s' % (overall_status, slug)
+        subject = '%s %s' % (overall_status, pr_processor.pull_request.slug)
         cls._send_email(pr_processor.config, subject, str(pr_checks_status))
 
     _BASE_URL = 'https://api.mailgun.net/v3/%s/messages'

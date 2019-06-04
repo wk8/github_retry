@@ -6,8 +6,6 @@ from beautifultable import BeautifulTable
 from models import Check
 
 
-# TODO wkpo cleanup les DB objects created?
-
 # needed for mocking in tests - can't mock datetime.datetime.now directly
 class Datetime(datetime.datetime):
     pass
@@ -151,7 +149,7 @@ class PullRequestProcessor(object):
             else:
                 check = Check(self._pr, gh_check.context)
 
-            if gh_check.state == 'error':
+            if gh_check.state in ('error', 'failure'):
                 max_retries = self._resolve_multi_level_config('max_retries', gh_check.context,
                                                                self.DEFAULT_MAX_RETRIES)
 
@@ -183,8 +181,8 @@ class PullRequestProcessor(object):
                 successful.append(check)
 
             else:
-                raise RuntimeError('Unknown check status %s for check %s in %s/%s' %
-                                   (gh_check.state, gh_check.context, self._pr.repo, self._pr.number))
+                raise RuntimeError('Unknown check status %s for check %s in %s' %
+                                   (gh_check.state, gh_check.context, self._pr.slug))
 
         return PullRequestChecksStatus(successful, pending, retrying, retry_pending, too_many_failures)
 
