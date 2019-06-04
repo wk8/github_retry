@@ -1,7 +1,10 @@
+import os
 import yaml
 
 
 class Config(object):
+    HOME_DIR = os.path.abspath(os.path.expanduser('~/.github_retry/'))
+
     def __init__(self, file='config.yml'):
         with open(file) as f:
             self._data = yaml.load(f, Loader=yaml.FullLoader)

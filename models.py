@@ -27,6 +27,8 @@ class PullRequest(Base):
     STATUSES = ['successful', 'pending', 'failed']
     status = Column(String(max([len(status) for status in STATUSES])))
 
+    _SHA_REGEX = re.compile(r'^[0-9a-f]{40}$')
+
     # repo is eg moby/moby
     # number is eg 34567
     def __init__(self, repo, number):
@@ -54,6 +56,17 @@ class PullRequest(Base):
             raise AssertionError
 
         return status
+
+    @validates('last_processed_sha')
+    def _validate_last_processed_sha(self, _key, sha):
+        if sha and not self.__class__.is_valid_sha(sha):
+            raise AssertionError
+
+        return sha
+
+    @classmethod
+    def is_valid_sha(cls, sha):
+        return cls._SHA_REGEX.match(sha)
 
 
 class Check(Base):

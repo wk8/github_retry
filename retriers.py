@@ -1,3 +1,13 @@
+import base64
+import contextlib
+import os
+import pathlib
+import subprocess
+
+from config import Config
+from models import PullRequest
+
+
 class BaseRetrier(object):
     def cleanup(self, pr_processor):
         raise NotImplementedError
@@ -11,10 +21,106 @@ class GitAmendPushRetrier(BaseRetrier):
         # nothing to do here
         pass
 
-    def retry(self, pr_processor, pr_checks_status):
-        raise NotImplementedError
+    def retry(self, pr_processor, _pr_checks_status):
+        pr = pr_processor.pull_request
+        gh_pr = pr_processor.client.get_repo(pr.repo).get_pull(pr.number)
+        pr_repo = gh_pr.head.repo.full_name
+
+        git_env = self.__class__._git_env(pr_processor, pr_repo)
+
+        self.__class__._clone_repo_if_needed(pr_repo, git_env)
+
+        self.__class__._git_command(pr_repo, 'clean -fdx')
+        self.__class__._git_command(pr_repo, 'fetch origin')
+        branch = gh_pr.head.ref
+        self.__class__._git_command(pr_repo, 'checkout %s' % (branch, ))
+        self.__class__._git_command(pr_repo, 'reset --hard origin/%s' % (branch, ))
+        self.__class__._git_command(pr_repo, 'commit --amend --no-edit')
+
+        new_sha = self.__class__._git_command(pr_repo, 'rev-parse HEAD')
+        if not PullRequest.is_valid_sha(new_sha):
+            raise RuntimeError('New sha is invalid: %s' % (new_sha, ))
+        pr_processor.pull_request.last_processed_sha = new_sha
+
+        self.__class__._git_command(pr_repo, 'push --force', env=git_env)
+
+    _WORKING_DIR = os.path.join(Config.HOME_DIR, 'amend_push_retrier')
+    _REPOS_ROOT = os.path.join(_WORKING_DIR, 'repos')
+    _SSH_KEYS = os.path.join(_WORKING_DIR, 'ssh_keys')
 
     # no need to get a full blown git lib for what we do here
+    # subpath is relative to the repos' root
     @classmethod
-    def _git_command(subcommand):
-        pass
+    def _git_command(cls, subpath, subcommand, **kwargs):
+        with cls._with_chdir(os.path.join(cls._REPOS_ROOT, subpath)):
+            print('wkpo running %s in %s' % (subcommand, os.getcwd()))
+            output = subprocess.check_output('git ' + subcommand,  shell=True, stderr=subprocess.STDOUT, **kwargs)
+            if isinstance(output, bytes):
+                output = output.decode()
+            return output.strip()
+
+    @classmethod
+    @contextlib.contextmanager
+    def _with_chdir(cls, path):
+        pwd = os.getcwd()
+        try:
+            cls._mkdir_chdir(path)
+            yield
+        finally:
+            os.chdir(pwd)
+
+    @staticmethod
+    def _mkdir_chdir(path):
+        try:
+            os.chdir(path)
+        except FileNotFoundError:
+            pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+            os.chdir(path)
+
+    @classmethod
+    def _git_env(cls, pr_processor, pr_repo):
+        key_path = cls._render_ssh_key(pr_processor, pr_repo)
+        # see https://stackoverflow.com/a/28527476
+        # requires git 2.3+
+        ssh_command = 'ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i ' + key_path
+
+        env = os.environ.copy()
+        env['GIT_SSH_COMMAND'] = ssh_command
+
+        return env
+
+    @classmethod
+    def _render_ssh_key(cls, pr_processor, pr_repo):
+        b64_key = pr_processor.config.get('repositories', pr_processor.pull_request.repo, 'deploy_key')
+        if not b64_key:
+            raise RuntimeError('No deploy key for %s' % (pr_processor.pull_request.repo, ))
+        key = base64.b64decode(b64_key)
+
+        key_path = os.path.join(cls._SSH_KEYS, '%s.key' % (pr_repo, ))
+        with cls._with_chdir(os.path.dirname(key_path)):
+            with open(key_path, 'w') as key_file:
+                key_file.write(key.decode())
+
+        return key_path
+
+    @classmethod
+    def _clone_repo_if_needed(cls, pr_repo, git_env):
+        if not os.path.isdir(os.path.join(cls._REPOS_ROOT, pr_repo)):
+            clone_command = 'clone git@github.com:%s.git' % (pr_repo, )
+            cls._git_command(os.path.dirname(pr_repo), clone_command, env=git_env)
+
+
+if __name__ == '__main__':
+    if True:
+        from github import Github
+
+        from pr_processor import PullRequestProcessor
+
+        pull_request = PullRequest('moby/moby', 38349)
+        config = Config()
+        gh_client = Github(config.get('github', 'api_token'))
+        processor = PullRequestProcessor(pull_request, gh_client, config)
+
+        GitAmendPushRetrier().retry(processor, None)
+
+        print(pull_request.last_processed_sha)
