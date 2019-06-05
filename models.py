@@ -41,7 +41,7 @@ class PullRequest(Base):
         if not match:
             raise RuntimeError('Not a valid PR URL: %s' % (url, ))
 
-        return cls(match[1], match[2])
+        return cls(match.group(1), match.group(2))
 
     @validates('repo')
     def _validate_repo(self, _key, repo):
