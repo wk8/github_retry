@@ -7,7 +7,7 @@ requirements: activate
 	. activate && venv/bin/pip install -r requirements.txt
 
 venv:
-	@ [ -d venv ] || python3 -m venv venv
+	@ [ -d venv ] || python3 -m venv $(GITHUB_RETRY_VENV_INSTALL_OPTIONS) venv
 
 freeze: activate
 	. activate && venv/bin/pip freeze > requirements.txt
