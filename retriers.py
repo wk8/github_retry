@@ -35,7 +35,7 @@ class GitAmendPushRetrier(BaseRetrier):
         self.__class__._clone_repo_if_needed(pr_repo, git_env)
 
         self.__class__._git_command(pr_repo, 'clean -fdx')
-        self.__class__._git_command(pr_repo, 'fetch origin')
+        self.__class__._git_command(pr_repo, 'fetch origin', env=git_env)
         branch = gh_pr.head.ref
         self.__class__._git_command(pr_repo, 'checkout %s' % (branch, ))
         self.__class__._git_command(pr_repo, 'reset --hard origin/%s' % (branch, ))
@@ -103,6 +103,8 @@ class GitAmendPushRetrier(BaseRetrier):
         with cls._with_chdir(os.path.dirname(key_path)):
             with open(key_path, 'w') as key_file:
                 key_file.write(key.decode())
+        # SSH will refuse to use a key with permissions that are too open
+        os.chmod(key_path, 0o600)
 
         return key_path
 
@@ -148,6 +150,8 @@ class KubeRetrier(CommentsRetrier):
             if not comment.body.startswith(cls._PREFIX):
                 continue
             context = comment.body[len(cls._PREFIX):]
+            if ' ' in context:
+                continue
             if retry_pending is None or context not in retry_pending:
                 comment.delete()
 
