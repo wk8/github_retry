@@ -1,7 +1,7 @@
 import datetime
 import re
 
-from beautifultable import BeautifulTable
+from prettytable import PrettyTable
 
 from models import Check
 
@@ -28,14 +28,23 @@ class PullRequestChecksStatus(object):
             + len(self.retry_pending) + len(self.too_many_failures)
 
     def __repr__(self):
-        table = BeautifulTable()
-        table.column_headers = ['name', 'status', 'failure count', 'last retried at']
+        return '\n' + str(self.table) + '\n'
+
+    @property
+    def table(self):
+        table = PrettyTable()
+        table.field_names = ['name', 'status', 'failure count', 'last retried at']
         for status in ['successful', 'pending', 'retrying', 'retry_pending', 'too_many_failures']:
             pretty_status = status.replace('_', ' ')
             for check in getattr(self, status):
                 retried_at = check.last_retried_at if check.last_retried_at else '-'
-                table.append_row([check.context, pretty_status, check.failure_count, retried_at])
-        return '\n' + str(table) + '\n'
+                table.add_row([check.context, pretty_status, check.failure_count, retried_at])
+        return table
+
+    def to_html(self):
+        table = self.table
+        table.format = True
+        return '<br>' + table.get_html_string() + '<br>'
 
 
 class PullRequestProcessor(object):

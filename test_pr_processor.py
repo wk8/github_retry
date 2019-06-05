@@ -159,7 +159,7 @@ def assert_checks_equal(pull_request, actual, expected):
 
 def test_basic_retry(db_session, default_config):
     pull_request = PullRequest('moby/moby', 34567)
-    gh_client = FakeGithubClient(pull_request, ['sha1'], [[('coucou', 'pending', 12), ('blah', 'error', 28)]])
+    gh_client = FakeGithubClient(pull_request, ['1' * 40], [[('coucou', 'pending', 12), ('blah', 'error', 28)]])
 
     processor = PullRequestProcessor(pull_request, gh_client, default_config)
     retrier = FakeRetrier(processor)
@@ -168,7 +168,7 @@ def test_basic_retry(db_session, default_config):
     processor.run(db_session, retrier, notifier)
     gh_client.assert_exhausted()
 
-    assert_pr_equal(pull_request, pull_request, ('sha1', 'pending'))
+    assert_pr_equal(pull_request, pull_request, ('1' * 40, 'pending'))
 
     assert len(retrier.retried) == 1
     assert_checks_equal(pull_request, retrier.retried[0].retrying, [('blah', 28, 1)])
@@ -181,7 +181,7 @@ def test_basic_retry(db_session, default_config):
     assert len(notifier) == 1
 
     # let's look at what's in the DB
-    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('sha1', 'pending'))
+    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('1' * 40, 'pending'))
     assert_checks_equal(pull_request, db_session.query(Check).all(), ['coucou', ('blah', 28, 1)])
 
 
@@ -189,7 +189,7 @@ def test_pending_retry_checks_are_left_alone(db_session, default_config):
     pull_request = PullRequest('moby/moby', 34567)
     gh_client = FakeGithubClient(
         pull_request,
-        ['sha1', 'sha1', 'sha1'],
+        ['1' * 40, '1' * 40, '1' * 40],
         [[('coucou', 'pending', 12), ('blah', 'error', 28)], [], [('coucou', 'error', 12)]]
     )
 
@@ -201,7 +201,7 @@ def test_pending_retry_checks_are_left_alone(db_session, default_config):
     processor.run(db_session, retrier, notifier)
     processor.run(db_session, retrier, notifier)
 
-    assert_pr_equal(pull_request, pull_request, ('sha1', 'pending'))
+    assert_pr_equal(pull_request, pull_request, ('1' * 40, 'pending'))
 
     # everything should be the same as if we had just run once
     assert len(retrier.retried) == 1
@@ -215,7 +215,7 @@ def test_pending_retry_checks_are_left_alone(db_session, default_config):
     assert len(notifier) == 1
 
     # let's look at what's in the DB
-    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('sha1', 'pending'))
+    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('1' * 40, 'pending'))
     assert_checks_equal(pull_request, db_session.query(Check).all(), ['coucou', ('blah', 28, 1)])
 
     # now let's run a 3rd time, 'coucou' fails
@@ -233,7 +233,7 @@ def test_too_many_failures(db_session, default_config):
     pull_request = PullRequest('moby/moby', 34567)
     gh_client = FakeGithubClient(
         pull_request,
-        ['sha1', 'sha1', 'sha1'],
+        ['1' * 40, '1' * 40, '1' * 40],
         [[('coucou', 'pending', 12), ('fast_fail', 'error', 28)], [('fast_fail', 'error', 82)]]
     )
 
@@ -261,7 +261,7 @@ def test_too_many_failures(db_session, default_config):
     assert len(notifier.too_many_failures()[0]) == 2
     assert len(notifier) == 2
 
-    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('sha1', 'failed'))
+    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('1' * 40, 'failed'))
 
     # running again should not do anything
     processor.run(db_session, retrier, notifier)
@@ -272,7 +272,7 @@ def test_detect_success(db_session, default_config):
     pull_request = PullRequest('moby/moby', 34567)
     gh_client = FakeGithubClient(
         pull_request,
-        ['sha1', 'sha1', 'sha1'],
+        ['1' * 40, '1' * 40, '1' * 40],
         [[('coucou', 'success', 12), ('blah', 'pending', 28)], [('blah', 'success', 28)]]
     )
 
@@ -290,7 +290,7 @@ def test_detect_success(db_session, default_config):
     assert retrier.cleanup_count == 1
 
     # and let's check in the DB
-    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('sha1', 'successful'))
+    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('1' * 40, 'successful'))
     assert_checks_equal(pull_request, db_session.query(Check).all(), ['coucou', 'blah'])
 
     # running again should not do anything
@@ -307,7 +307,7 @@ def test_pending_retry_checks_are_retriggered_after_a_while(db_session, default_
         pull_request = PullRequest('moby/moby', 34567)
         gh_client = FakeGithubClient(
             pull_request,
-            ['sha1', 'sha1'],
+            ['1' * 40, '1' * 40],
             [[('coucou', 'pending', 12), ('blah', 'error', 28)], []]
         )
 
@@ -332,12 +332,12 @@ def test_pending_retry_checks_are_retriggered_after_a_while(db_session, default_
 
 def test_retrier_can_alter_db_objects(db_session, default_config):
     pull_request = PullRequest('moby/moby', 34567)
-    gh_client = FakeGithubClient(pull_request, ['sha1'], [[('coucou', 'pending', 12), ('blah', 'error', 28)]])
+    gh_client = FakeGithubClient(pull_request, ['1' * 40], [[('coucou', 'pending', 12), ('blah', 'error', 28)]])
 
     processor = PullRequestProcessor(pull_request, gh_client, default_config)
 
     def retry_func(pr_processor, pr_checks_status):
-        pr_processor.pull_request.last_processed_sha = 'sha_after_processing'
+        pr_processor.pull_request.last_processed_sha = '3' * 40
         assert len(pr_checks_status.retrying) == 1
         pr_checks_status.retrying[0].last_errored_id = 82
     retrier = FakeRetrier(processor, retry_func=retry_func)
@@ -347,7 +347,7 @@ def test_retrier_can_alter_db_objects(db_session, default_config):
     gh_client.assert_exhausted()
 
     # let's look at what's in the DB
-    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('sha_after_processing', 'pending'))
+    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('3' * 40, 'pending'))
     assert_checks_equal(pull_request, db_session.query(Check).all(), ['coucou', ('blah', 82, 1)])
 
 
@@ -355,7 +355,7 @@ def test_resume_after_failure_if_new_patch(db_session, default_config):
     pull_request = PullRequest('moby/moby', 34567)
     gh_client = FakeGithubClient(
         pull_request,
-        ['sha1', 'sha1', 'sha2'],
+        ['1' * 40, '1' * 40, '2' * 40],
         [[('coucou', 'pending', 12), ('fast_fail', 'error', 28)],
          [('fast_fail', 'error', 82)], [('coucou', 'pending', 13), ('fast_fail', 'error', 93)]]
     )
@@ -376,7 +376,7 @@ def test_resume_after_failure_if_new_patch(db_session, default_config):
     # and we should have cleaned up
     assert retrier.cleanup_count == 1
 
-    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('sha1', 'failed'))
+    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('1' * 40, 'failed'))
 
     # now let's run again, it's a new patch
     processor.run(db_session, retrier, notifier)
@@ -388,14 +388,14 @@ def test_resume_after_failure_if_new_patch(db_session, default_config):
     assert_checks_equal(pull_request, retrier.retried[1].pending, ['coucou'])
     assert len(retrier.retried[0]) == 2
 
-    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('sha2', 'pending'))
+    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('2' * 40, 'pending'))
 
 
 def test_resume_after_success_if_new_patch(db_session, default_config):
     pull_request = PullRequest('moby/moby', 34567)
     gh_client = FakeGithubClient(
         pull_request,
-        ['sha1', 'sha1', 'sha2'],
+        ['1' * 40, '1' * 40, '2' * 40],
         [[('coucou', 'success', 12), ('blah', 'pending', 28)],
          [('blah', 'success', 28)], [('coucou', 'error', 13), ('blah', 'pending', 93)]]
     )
@@ -413,7 +413,7 @@ def test_resume_after_success_if_new_patch(db_session, default_config):
     # but we should have cleaned up
     assert retrier.cleanup_count == 1
 
-    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('sha1', 'successful'))
+    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('1' * 40, 'successful'))
 
     # now let's run again, it's a new patch
     processor.run(db_session, retrier, notifier)
@@ -425,13 +425,13 @@ def test_resume_after_success_if_new_patch(db_session, default_config):
     assert_checks_equal(pull_request, retrier.retried[0].pending, ['blah'])
     assert len(retrier.retried[0]) == 2
 
-    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('sha2', 'pending'))
+    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('2' * 40, 'pending'))
 
 
 def test_it_ignores_checks_marked_as_such(db_session, default_config):
     pull_request = PullRequest('moby/moby', 34567)
     gh_client = FakeGithubClient(
-        pull_request, ['sha1', 'sha1'], [[('coucou', 'success', 12), ('codecov/patch', 'error', 28)]])
+        pull_request, ['1' * 40, '1' * 40], [[('coucou', 'success', 12), ('codecov/patch', 'error', 28)]])
 
     processor = PullRequestProcessor(pull_request, gh_client, default_config)
     retrier = FakeRetrier(processor)
@@ -439,7 +439,7 @@ def test_it_ignores_checks_marked_as_such(db_session, default_config):
 
     processor.run(db_session, retrier, notifier)
 
-    assert_pr_equal(pull_request, pull_request, ('sha1', 'successful'))
+    assert_pr_equal(pull_request, pull_request, ('1' * 40, 'successful'))
 
     # we shouldn't have retried anything
     assert len(retrier.retried) == 0
@@ -447,7 +447,7 @@ def test_it_ignores_checks_marked_as_such(db_session, default_config):
     assert retrier.cleanup_count == 1
 
     # and let's check in the DB
-    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('sha1', 'successful'))
+    assert_pr_equal(pull_request, db_session.query(PullRequest).all()[0], ('1' * 40, 'successful'))
     assert_checks_equal(pull_request, db_session.query(Check).all(), ['coucou'])
 
     # running again should not do anything

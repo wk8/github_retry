@@ -72,6 +72,10 @@ class PullRequest(Base):
     def slug(self):
         return '%s#%s' % (self.repo, self.number)
 
+    @property
+    def url(self):
+        return 'https://github.com/%s/pull/%s' % (self.repo, self.number)
+
     checks = relationship('Check', cascade='all,delete')
 
 

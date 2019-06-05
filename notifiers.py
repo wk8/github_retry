@@ -31,13 +31,17 @@ class MailgunNotifier(BaseNotifier):
     @classmethod
     def _notify(cls, overall_status, pr_processor, pr_checks_status):
         subject = '%s %s' % (overall_status, pr_processor.pull_request.slug)
-        cls._send_email(pr_processor.config, subject, str(pr_checks_status))
+
+        link = '<a href="%s">%s</a>' % (pr_processor.pull_request.url, pr_processor.pull_request.url)
+        html = link + '<br>' + pr_checks_status.to_html()
+
+        cls._send_email(pr_processor.config, subject, html)
 
     _BASE_URL = 'https://api.mailgun.net/v3/%s/messages'
 
     # see https://github.com/nicholaskajoh/mail-bazooka/blob/master/main.py
     @classmethod
-    def _send_email(cls, config, subject, body):
+    def _send_email(cls, config, subject, html):
         url = cls._BASE_URL % (cls._config(config, 'domain'), )
         requests.post(
             url,
@@ -46,7 +50,7 @@ class MailgunNotifier(BaseNotifier):
                 'from': cls._config(config, 'from'),
                 'to': cls._config(config, 'to'),
                 'subject': subject,
-                'text': body
+                'html': html
             }
         )
 
