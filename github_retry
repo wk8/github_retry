@@ -1,3 +1,9 @@
 #!/bin/bash
 
-. activate && python main.py
+set -e
+
+cd "$(dirname $(readlink -f $0))"
+
+. activate
+
+exec python main.py
