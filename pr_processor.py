@@ -187,6 +187,10 @@ class PullRequestProcessor(object):
                 pending.append(check)
 
             elif gh_check.state == 'success':
+                # TODO wkpo here should be
+                # check.failure_count = 0
+                # check.last_errored_id = None
+                # TODO wkpo fix this, plus update tests
                 successful.append(check)
 
             else:
