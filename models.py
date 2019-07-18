@@ -76,6 +76,9 @@ class PullRequest(Base):
     def url(self):
         return 'https://github.com/%s/pull/%s' % (self.repo, self.number)
 
+    def __repr__(self):
+        return self.slug
+
     checks = relationship('Check', cascade='all,delete')
 
 

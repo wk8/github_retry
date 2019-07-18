@@ -6,6 +6,7 @@ import subprocess
 
 from config import Config
 from models import PullRequest
+from gh_utils import CommentsHelper, GithubUtils
 
 
 class BaseRetrier(object):
@@ -17,8 +18,7 @@ class BaseRetrier(object):
 
     @staticmethod
     def _github_pr(pr_processor):
-        pr = pr_processor.pull_request
-        return pr_processor.client.get_repo(pr.repo).get_pull(pr.number)
+        return GithubUtils.github_pr(pr_processor.client, pr_processor.pull_request)
 
 
 class GitAmendPushRetrier(BaseRetrier):
@@ -116,21 +116,14 @@ class GitAmendPushRetrier(BaseRetrier):
 
 
 class CommentsRetrier(BaseRetrier):
-    # returns the list of all comments made by the user we post as
-    # comments are IssueComment objects
-    # see https://pygithub.readthedocs.io/en/latest/github_objects/IssueComment.html
-    @classmethod
-    def _get_all_comments_by_user(cls, pr_processor):
-        user = pr_processor.config.get('github', 'user')
-        if not user:
-            raise RuntimeError('Missing Github username!')
+    @staticmethod
+    def _get_all_comments_by_user(pr_processor):
+        return CommentsHelper.get_all_comments_by_user_on_pr(pr_processor.client, pr_processor.config,
+                                                             pr_processor.pull_request)
 
-        gh_pr = cls._github_pr(pr_processor)
-        return [c for c in gh_pr.get_issue_comments() if c.user.login == user]
-
-    @classmethod
-    def _post_comment(cls, pr_processor, body):
-        return cls._github_pr(pr_processor).create_issue_comment(body)
+    @staticmethod
+    def _post_comment(pr_processor, body):
+        return CommentsHelper.post_comment(pr_processor.client, pr_processor.pull_request, body)
 
 
 class KubeRetrier(CommentsRetrier):

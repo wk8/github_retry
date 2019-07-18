@@ -3,6 +3,7 @@ from github import Github
 from config import Config
 from database import init_db
 from models import PullRequest
+from gh_utils import CommentsHelper
 from notifiers import MailgunNotifier
 from retriers import *
 from pr_processor import PullRequestProcessor
@@ -18,7 +19,7 @@ class Main(object):
         all_gh_prs = cls._fetch_prs(gh_client, config)
         existing_prs = cls._existing_db_prs(db_session)
 
-        to_process, to_cleanup = cls._triage_prs(config, all_gh_prs, existing_prs)
+        to_process, to_cleanup = cls._triage_prs(gh_client, config, all_gh_prs, existing_prs)
 
         cls._process_prs(to_process, gh_client, config, db_session)
         cls._cleanup_prs(to_cleanup, gh_client, config, db_session)
@@ -46,12 +47,12 @@ class Main(object):
         return {pr.slug: pr for pr in db_session.query(PullRequest).all()}
 
     @classmethod
-    def _triage_prs(cls, config, all_gh_prs, existing_prs):
+    def _triage_prs(cls, gh_client, config, all_gh_prs, existing_prs):
         to_process = []
 
         for pr in all_gh_prs:
             repo_config = cls._repo_config(config, pr)
-            if repo_config is None:
+            if repo_config is None or cls._ignore_pr(gh_client, config, pr):
                 continue
 
             existing_pr = existing_prs.pop(pr.slug, None)
@@ -61,6 +62,16 @@ class Main(object):
             to_process.append(pr)
 
         return to_process, existing_prs.values()
+
+    @classmethod
+    def _ignore_pr(cls, gh_client, config, pull_request):
+        all_comments = CommentsHelper.get_all_comments_by_user_on_pr(gh_client, config, pull_request)
+
+        for comment in all_comments:
+            if '/retrier ignore' in comment.body:
+                return True
+
+        return False
 
     @classmethod
     def _process_prs(cls, to_process, gh_client, config, db_session):
